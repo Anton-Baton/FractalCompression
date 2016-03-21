@@ -22,7 +22,14 @@ def load_image(filename):
 
 
 def save_image(filename, img):
-    reshaped_data = np.reshape(zip(*img.image_data), (img.width, img.height, img.channels))
-    image = Image.fromarray(reshaped_data, img.mode)
+    #data = zip(*img.image_data)
+
+    #if img.channels == 1:
+    #    reshaped_data = np.reshape(data, (img.height, img.width))
+    #else:
+    #    reshaped_data = np.reshape(data, (img.width, img.height, img.channels))
+    bands = map(lambda ch: Image.fromarray(ch.reshape((img.height, img.width)), 'L'), img.image_data)
+    #image = Image.fromarray(reshaped_data, img.mode)
+    image = Image.merge(img.mode, bands)
     image.save(filename)
 

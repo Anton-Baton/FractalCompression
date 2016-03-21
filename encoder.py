@@ -10,7 +10,7 @@ RANGE_BLOCK_SIZE = 8
 DOMAIN_SCALE_FACTOR = 2
 DOMAIN_BLOCK_SIZE = RANGE_BLOCK_SIZE*DOMAIN_SCALE_FACTOR
 DOMAIN_SKIP_FACTOR = 16
-DEBUG = True
+#DEBUG = True
 
 
 def _downsample_by_2(channel, width, height):
@@ -34,12 +34,12 @@ def _downsample_by_2(channel, width, height):
             # compute real coordinates
             rc = y*width+x
             next_row_rc = rc+width
-            value = sum(channel[rc: rc+nc]+channel[next_row_rc:next_row_rc+nc])/(nc**2)
+            value = (channel[rc: rc+nc].sum()+channel[next_row_rc:next_row_rc+nc].sum())/(nc**2)
             downsampled_blocks[y/nc, x/nc] = value
     return downsampled_blocks
 
 
-def _find_domain_block(range_x, range_y, width, height, treshold, channel, domain_pool):
+def _find_domain_block(range_x, range_y, width, height, treshold, channel, domain_pool, domain_averages):
     """
     Function finds appropriate domain block for a specified range block
     :param range_x: range block top left x coordinate
@@ -53,12 +53,12 @@ def _find_domain_block(range_x, range_y, width, height, treshold, channel, domai
     """
     # extract range block from image data
     range_block = np.zeros((RANGE_BLOCK_SIZE**2,))
+    # range_block =
     for i in xrange(RANGE_BLOCK_SIZE):
         start_point = (range_y+i)*width+range_x
-        # TODO: check the correctness of the next statement
         range_block[i*RANGE_BLOCK_SIZE:(i+1)*RANGE_BLOCK_SIZE] = channel[start_point: start_point+RANGE_BLOCK_SIZE]
     # normalize range block by average pixel value
-    range_block_average = range_block.sum()/(RANGE_BLOCK_SIZE**2)
+    range_block_average = int(range_block.sum()/(RANGE_BLOCK_SIZE**2))
     range_block -= range_block_average
 
     # prepare values to store result
@@ -70,18 +70,23 @@ def _find_domain_block(range_x, range_y, width, height, treshold, channel, domai
     # search of appropriate domain block
     for domain_block_index, domain_block in enumerate(domain_pool):
         # find scale, offset and MSE
-        scale = (range_block*domain_block).sum()/(domain_block**2).sum()
-        difference = (range_block - scale*domain_block)
-        offset = difference.sum()
-        # TODO: prove this is working
-        # error = ((scale*domain_block-range_block)**2).sum()/(RANGE_BLOCK_SIZE**2)
-        error = (difference**2).sum()/(RANGE_BLOCK_SIZE**2)
+        domain_block_average = domain_averages[domain_block_index]
+        avg_domain_block = domain_block - domain_block_average
+        bottom = (avg_domain_block * avg_domain_block).sum()
+        if bottom == 0.0:
+            scale = 0.0
+        else:
+            scale = (range_block * avg_domain_block).sum()*1.0/bottom
+
+        offset = int(range_block_average-domain_block_average*scale)
+        # offset = range_block_average
+        difference = (range_block - scale*avg_domain_block)
+        error = (difference * difference).sum()*1.0/(RANGE_BLOCK_SIZE**2)
         if error < min_error:
             min_error = error
             min_block_index = domain_block_index
             min_scale_factor = scale
             min_offset = offset
-
     return min_block_index, min_scale_factor, min_offset
 
 
@@ -95,14 +100,17 @@ def _get_domain_pool(width, height, downsampled):
     """
     domain_pool = []
     domain_positions = []
+    domain_averages = []
     # run through all domain blocks and create  transformations of
     for y in xrange(0, height-DOMAIN_BLOCK_SIZE+1, DOMAIN_SKIP_FACTOR):
         for x in xrange(0, width-DOMAIN_BLOCK_SIZE+1, DOMAIN_SKIP_FACTOR):
             for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
-                domain_pool.append(get_affine_transform(
-                    x, y, 1, 0, transform_type, RANGE_BLOCK_SIZE, downsampled, normalize=True))
+                domain = get_affine_transform(
+                    x, y, 1.0, 0, transform_type, RANGE_BLOCK_SIZE, downsampled)
+                domain_pool.append(domain)
+                domain_averages.append(int(domain.sum()/(RANGE_BLOCK_SIZE**2)))
                 domain_positions.append((x, y))
-    return domain_pool, domain_positions
+    return domain_pool, domain_averages, domain_positions
 
 
 def encode(img):
@@ -116,17 +124,19 @@ def encode(img):
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
-        domain_pool, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
+        domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
         transformations = []
-        if DEBUG:
-            domain_pool = domain_pool[:20]
+        domain_pool = domain_pool[:1024]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
             for x in xrange(0, img.width, RANGE_BLOCK_SIZE):
-                domain_index, scale, offset = _find_domain_block(x, y, img.width, img.height, 500, channel, domain_pool)
+                domain_index, scale, offset = \
+                    _find_domain_block(x, y, img.width, img.height, 500, channel, domain_pool, domain_avg)
+
                 domain_x, domain_y = domain_positions[domain_index]
                 transformation_type = domain_index % TRANSFORM_MAX
+                #print domain_index, scale, offset, transformation_type
                 transformations.append(Transformation(domain_x, domain_y, x, y, scale, offset,
                                                       RANGE_BLOCK_SIZE, DOMAIN_BLOCK_SIZE, transformation_type))
                 print '.',

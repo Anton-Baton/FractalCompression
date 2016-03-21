@@ -18,11 +18,11 @@ def _is_in_scanline_order(type):
 
 
 def _is_positive_x(type):
-    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_90, TRANSFORM_FLIP_V, TRANSFORM_FLIP_FORWARD_DIAGONAL]
+    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_90, TRANSFORM_FLIP_V, TRANSFORM_FLIP_REVERSE_DIAGONAL]
 
 
 def _is_positive_y(type):
-    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_270, TRANSFORM_FLIP_H, TRANSFORM_FLIP_FORWARD_DIAGONAL]
+    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_270, TRANSFORM_FLIP_H, TRANSFORM_FLIP_REVERSE_DIAGONAL]
 
 
 def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size, downsampled, normalize=False):
@@ -67,7 +67,7 @@ def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size
         for j in xrange(range_block_size):
             pixel = max(0, min(255, int(scale*downsampled[start_y+y, start_x+x])+offset))
             block[i, j] = pixel
-            block_sum += pixel
+            #block_sum += pixel
             if scanline_order:
                 x += dx
             else:
@@ -78,4 +78,5 @@ def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size
         else:
             y = 0
             x += dx
-    return block.ravel() - block_sum/(range_block_size**2) if normalize else block.ravel()
+    #average_value = block_sum/(range_block_size**2)
+    return block.ravel() #- average_value, average_value if normalize else block.ravel(), average_value
