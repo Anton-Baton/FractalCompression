@@ -3,12 +3,14 @@ import numpy as np
 from transformations import Transformation
 from affine_transformer import get_affine_transform, TRANSFORM_NONE, TRANSFORM_MAX
 import time
+import multiprocessing
 
 
 RANGE_BLOCK_SIZE = 8
 DOMAIN_SCALE_FACTOR = 2
 DOMAIN_BLOCK_SIZE = RANGE_BLOCK_SIZE*DOMAIN_SCALE_FACTOR
-DOMAIN_SKIP_FACTOR = 4
+DOMAIN_SKIP_FACTOR = 16
+DEBUG = True
 
 
 def _downsample_by_2(channel, width, height):
@@ -68,8 +70,7 @@ def _find_domain_block(range_x, range_y, width, height, treshold, channel, domai
     # search of appropriate domain block
     for domain_block_index, domain_block in enumerate(domain_pool):
         # find scale, offset and MSE
-        scale = (range_block*domain_block).sum()/(domain_block**2)
-        print scale
+        scale = (range_block*domain_block).sum()/(domain_block**2).sum()
         difference = (range_block - scale*domain_block)
         offset = difference.sum()
         # TODO: prove this is working
@@ -117,6 +118,8 @@ def encode(img):
         downsampled = _downsample_by_2(channel, img.width, img.height)
         domain_pool, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
         transformations = []
+        if DEBUG:
+            domain_pool = domain_pool[:20]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
@@ -133,4 +136,7 @@ def encode(img):
     return channels_transformations
 
 
+#def mtpcs():
+#    pool = multiprocessing.Pool()
+#    pool.map()
 
