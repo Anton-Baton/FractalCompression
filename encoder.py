@@ -10,7 +10,6 @@ RANGE_BLOCK_SIZE = 8
 DOMAIN_SCALE_FACTOR = 2
 DOMAIN_BLOCK_SIZE = RANGE_BLOCK_SIZE*DOMAIN_SCALE_FACTOR
 DOMAIN_SKIP_FACTOR = 16
-#DEBUG = True
 
 
 def _downsample_by_2(channel, width, height):
@@ -22,9 +21,6 @@ def _downsample_by_2(channel, width, height):
     :param height: image height
     :return: downsampled blocks values
     """
-    channel_len = len(channel)
-    if channel_len != width*height:
-        raise ValueError('channel length should be exactly width*height')
 
     # number of neighbour cell(neighbours number) to be averaged
     nc = 2
@@ -32,31 +28,23 @@ def _downsample_by_2(channel, width, height):
     for y in xrange(0, height, nc):
         for x in xrange(0, width, nc):
             # compute real coordinates
-            rc = y*width+x
-            next_row_rc = rc+width
-            value = (channel[rc: rc+nc].sum()+channel[next_row_rc:next_row_rc+nc].sum())/(nc**2)
+            value = int(channel[y: y+nc, x: x+nc].sum()/(nc**2))
             downsampled_blocks[y/nc, x/nc] = value
     return downsampled_blocks
 
 
-def _find_domain_block(range_x, range_y, width, height, treshold, channel, domain_pool, domain_averages):
+def _find_domain_block(range_x, range_y, treshold, channel, domain_pool, domain_averages):
     """
     Function finds appropriate domain block for a specified range block
     :param range_x: range block top left x coordinate
     :param range_y: range block top left y coordinate
-    :param width: image width
-    :param height: image height
     :param treshold: search accuracy
     :param channel: image data
     :param domain_pool: domain pool
     :return: typle of domain block index, scale and offset
     """
     # extract range block from image data
-    range_block = np.zeros((RANGE_BLOCK_SIZE**2,))
-    # range_block =
-    for i in xrange(RANGE_BLOCK_SIZE):
-        start_point = (range_y+i)*width+range_x
-        range_block[i*RANGE_BLOCK_SIZE:(i+1)*RANGE_BLOCK_SIZE] = channel[start_point: start_point+RANGE_BLOCK_SIZE]
+    range_block = channel[range_y:range_y+RANGE_BLOCK_SIZE, range_x:range_x+RANGE_BLOCK_SIZE].copy()
     # normalize range block by average pixel value
     range_block_average = int(range_block.sum()/(RANGE_BLOCK_SIZE**2))
     range_block -= range_block_average
@@ -95,7 +83,7 @@ def _get_domain_pool(width, height, downsampled):
     Function that produce a domain pool with all domain blocks and their transformations
     :param width: width of initial image
     :param height: height of initial image
-    :param downsampled: downsampled image date
+    :param downsampled: downsampled image data
     :return: domain pool and domain coordinated
     """
     domain_pool = []
@@ -126,13 +114,13 @@ def encode(img):
         downsampled = _downsample_by_2(channel, img.width, img.height)
         domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
         transformations = []
-        domain_pool = domain_pool[:1024]
+        domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
             for x in xrange(0, img.width, RANGE_BLOCK_SIZE):
                 domain_index, scale, offset = \
-                    _find_domain_block(x, y, img.width, img.height, 500, channel, domain_pool, domain_avg)
+                    _find_domain_block(x, y, 500, channel, domain_pool, domain_avg)
 
                 domain_x, domain_y = domain_positions[domain_index]
                 transformation_type = domain_index % TRANSFORM_MAX

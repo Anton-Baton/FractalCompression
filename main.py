@@ -6,7 +6,7 @@ import decoder
 
 
 if __name__ == '__main__':
-    img = image.load_image('lena.bmp')
+    img = image.load_image('lena256.bmp')
     print img.width, img.height
     transformations = encoder.encode(img)
     print len(transformations), len(transformations[0])

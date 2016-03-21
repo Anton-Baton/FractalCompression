@@ -79,4 +79,4 @@ def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size
             y = 0
             x += dx
     #average_value = block_sum/(range_block_size**2)
-    return block.ravel() #- average_value, average_value if normalize else block.ravel(), average_value
+    return block #- average_value, average_value if normalize else block.ravel(), average_value

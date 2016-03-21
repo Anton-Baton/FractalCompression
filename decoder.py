@@ -44,8 +44,8 @@ def decode(iterations, width, height, channels_transformations):
                 #    print num
                 downsampled = _downsample_locally(dx, dy, ds, rs, image)
                 image[ry:ry+rs, rx:rx+rs] =\
-                    get_affine_transform(0, 0, scale, offset, type, rs, downsampled).reshape((rs, rs))
+                    get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
                 #num += 1
-        channels.append(image.ravel())
+        channels.append(image)
     print time.time() - start_time
     return channels
