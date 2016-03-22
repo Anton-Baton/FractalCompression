@@ -2,7 +2,8 @@ __author__ = 'anton'
 import numpy as np
 from affine_transformer import get_affine_transform
 import time
-
+import multiprocessing as mp
+from functools import partial
 
 def _downsample_locally(start_x, start_y, domain_size, range_size, image):
     block = np.zeros((range_size, range_size))
@@ -16,24 +17,50 @@ def _downsample_locally(start_x, start_y, domain_size, range_size, image):
     return block
 
 
+def decode_parallel(iterations, width, height, channels_transformations):
+    pool = mp.Pool()
+    start_time = time.time()
+    result = pool.map(
+        partial(_decode_channel, iter=iterations, width=width, height=height), channels_transformations)
+    print time.time() - start_time
+    return result
+
+
+def _decode_channel(channel_transformations, iter, width, height):
+    image = np.zeros((width, height), dtype=np.uint8)
+    image.fill(127)
+    for i in xrange(iter):
+        for transformation in channel_transformations:
+            ry, rx = transformation.range_y, transformation.range_x
+            dy, dx = transformation.domain_y, transformation.domain_x
+            rs, ds = transformation.range_size, transformation.domain_size
+            scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
+            # TODO: try to avoid downsampling every time
+            downsampled = _downsample_locally(dx, dy, ds, rs, image)
+            image[ry:ry+rs, rx:rx+rs] =\
+                get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
+    return image
+
+
 def decode(iterations, width, height, channels_transformations):
     channels = []
     start_time = time.time()
     # run through all channels
     for channel_transformations in channels_transformations:
         # use mid-gray picture as initial
-        image = np.zeros((width, height), dtype=np.uint8)
-        image.fill(127)
-        for i in xrange(iterations):
-            for transformation in channel_transformations:
-                ry, rx = transformation.range_y, transformation.range_x
-                dy, dx = transformation.domain_y, transformation.domain_x
-                rs, ds = transformation.range_size, transformation.domain_size
-                scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
-                # TODO: try to avoid downsampling every time
-                downsampled = _downsample_locally(dx, dy, ds, rs, image)
-                image[ry:ry+rs, rx:rx+rs] =\
-                    get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
+        # image = np.zeros((width, height), dtype=np.uint8)
+        # image.fill(127)
+        # for i in xrange(iterations):
+        #     for transformation in channel_transformations:
+        #         ry, rx = transformation.range_y, transformation.range_x
+        #         dy, dx = transformation.domain_y, transformation.domain_x
+        #         rs, ds = transformation.range_size, transformation.domain_size
+        #         scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
+        #         # TODO: try to avoid downsampling every time
+        #         downsampled = _downsample_locally(dx, dy, ds, rs, image)
+        #         image[ry:ry+rs, rx:rx+rs] =\
+        #             get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
+        image = _decode_channel(channel_transformations, iterations, width, height)
         channels.append(image)
     print time.time() - start_time
     return channels
