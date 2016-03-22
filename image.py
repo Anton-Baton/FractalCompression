@@ -16,11 +16,7 @@ class ImageData(object):
 
 def load_image(filename):
     image = Image.open(filename)
-    r, g, b = image.split()
-    r_data = np.reshape(r.getdata(), image.size)
-    g_data = np.reshape(g.getdata(), image.size)
-    b_data = np.reshape(b.getdata(), image.size)
-    image_data = np.array([r_data, g_data, b_data])
+    image_data = np.array(map(lambda x: np.reshape(x.getdata(), image.size), image.split()))
     img = ImageData(*image.size, image_data=image_data, mode=image.mode)
     return img
 

@@ -114,7 +114,7 @@ def encode(img):
         downsampled = _downsample_by_2(channel, img.width, img.height)
         domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
         transformations = []
-        #domain_pool = domain_pool[:256]
+        domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
