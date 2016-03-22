@@ -20,7 +20,7 @@ def _downsample_locally(start_x, start_y, domain_size, range_size, image):
         domain_pos_y = start_y+y*nc
         for x in xrange(range_size):
             domain_pos_x = start_x+x*nc
-            block[y, x] = image[domain_pos_y:domain_pos_y+nc, domain_pos_x:domain_pos_x+nc].sum()/(nc**2)
+            block[y, x] = int(image[domain_pos_y:domain_pos_y+nc, domain_pos_x:domain_pos_x+nc].sum()/(nc**2))
     return block
 
 
@@ -31,7 +31,7 @@ def decode(iterations, width, height, channels_transformations):
     #num = 0
     for channel_transformations in channels_transformations:
         # use mid-gray picture as initial
-        image = np.zeros((width, height))
+        image = np.zeros((width, height), dtype=np.uint8)
         image.fill(127)
         for i in xrange(iterations):
             for transformation in channel_transformations:

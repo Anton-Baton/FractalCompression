@@ -18,11 +18,11 @@ def _is_in_scanline_order(type):
 
 
 def _is_positive_x(type):
-    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_90, TRANSFORM_FLIP_V, TRANSFORM_FLIP_REVERSE_DIAGONAL]
+    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_90, TRANSFORM_FLIP_V, TRANSFORM_FLIP_FORWARD_DIAGONAL]
 
 
 def _is_positive_y(type):
-    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_270, TRANSFORM_FLIP_H, TRANSFORM_FLIP_REVERSE_DIAGONAL]
+    return type in [TRANSFORM_NONE, TRANSFORM_ROTATE_270, TRANSFORM_FLIP_H, TRANSFORM_FLIP_FORWARD_DIAGONAL]
 
 
 def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size, downsampled, normalize=False):

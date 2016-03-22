@@ -16,20 +16,16 @@ class ImageData(object):
 
 def load_image(filename):
     image = Image.open(filename)
-    image_data = np.array(map(lambda x: np.reshape(x.getdata(), image.size), image.split()))
+    r, g, b = image.split()
+    r_data = np.reshape(r.getdata(), image.size)
+    g_data = np.reshape(g.getdata(), image.size)
+    b_data = np.reshape(b.getdata(), image.size)
+    image_data = np.array([r_data, g_data, b_data])
     img = ImageData(*image.size, image_data=image_data, mode=image.mode)
     return img
 
 
 def save_image(filename, img):
-    #data = zip(*img.image_data)
-
-    #if img.channels == 1:
-    #    reshaped_data = np.reshape(data, (img.height, img.width))
-    #else:
-    #    reshaped_data = np.reshape(data, (img.width, img.height, img.channels))
-    bands = map(lambda ch: Image.fromarray(ch, 'L'), img.image_data)
-    #image = Image.fromarray(reshaped_data, img.mode)
-    image = Image.merge(img.mode, bands)
+    image = Image.fromarray(np.dstack(img.image_data), img.mode)
     image.save(filename)
 
