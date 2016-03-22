@@ -3,7 +3,6 @@ import numpy as np
 from transformations import Transformation
 from affine_transformer import get_affine_transform, TRANSFORM_NONE, TRANSFORM_MAX
 import time
-import multiprocessing
 
 
 RANGE_BLOCK_SIZE = 8
@@ -67,7 +66,6 @@ def _find_domain_block(range_x, range_y, treshold, channel, domain_pool, domain_
             scale = (range_block * avg_domain_block).sum()*1.0/bottom
 
         offset = int(range_block_average-domain_block_average*scale)
-        # offset = range_block_average
         difference = (range_block - scale*avg_domain_block)
         error = (difference * difference).sum()*1.0/(RANGE_BLOCK_SIZE**2)
         if error < min_error:
@@ -124,7 +122,6 @@ def encode(img):
 
                 domain_x, domain_y = domain_positions[domain_index]
                 transformation_type = domain_index % TRANSFORM_MAX
-                #print domain_index, scale, offset, transformation_type
                 transformations.append(Transformation(domain_x, domain_y, x, y, scale, offset,
                                                       RANGE_BLOCK_SIZE, DOMAIN_BLOCK_SIZE, transformation_type))
                 print '.',
@@ -134,7 +131,4 @@ def encode(img):
     return channels_transformations
 
 
-#def mtpcs():
-#    pool = multiprocessing.Pool()
-#    pool.map()
 

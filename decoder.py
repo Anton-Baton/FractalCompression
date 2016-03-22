@@ -4,14 +4,6 @@ from affine_transformer import get_affine_transform
 import time
 
 
-# def transform_domain_block(domain_x, domain_y, domain_size, range_size, scale, offset, image):
-#     transformed_domain_block = np.zeros((range_size, range_size))
-#     scale = domain_size/range_size
-#     for i in xrange(range_size):
-#         for j in xrange(range_size):
-#             pixel = image[domain_y:domain_y+scale, domain_x:domain_x+scale].sum()/(scale**2)
-#             transformed_domain_block[i, j] = scale*pixel+offset
-#     return transformed_domain_block
 def _downsample_locally(start_x, start_y, domain_size, range_size, image):
     block = np.zeros((range_size, range_size))
     # neighbours count
@@ -28,7 +20,6 @@ def decode(iterations, width, height, channels_transformations):
     channels = []
     start_time = time.time()
     # run through all channels
-    #num = 0
     for channel_transformations in channels_transformations:
         # use mid-gray picture as initial
         image = np.zeros((width, height), dtype=np.uint8)
@@ -40,12 +31,9 @@ def decode(iterations, width, height, channels_transformations):
                 rs, ds = transformation.range_size, transformation.domain_size
                 scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
                 # TODO: try to avoid downsampling every time
-                #if image is None:
-                #    print num
                 downsampled = _downsample_locally(dx, dy, ds, rs, image)
                 image[ry:ry+rs, rx:rx+rs] =\
                     get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
-                #num += 1
         channels.append(image)
     print time.time() - start_time
     return channels

@@ -61,13 +61,11 @@ def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size
 
     x = y = 0
     block = np.zeros((range_block_size, range_block_size))
-    block_sum = 0
     # run through all 4 pixel downsampled mini-blocks and store them in special order
     for i in xrange(range_block_size):
         for j in xrange(range_block_size):
             pixel = max(0, min(255, int(scale*downsampled[start_y+y, start_x+x])+offset))
             block[i, j] = pixel
-            #block_sum += pixel
             if scanline_order:
                 x += dx
             else:
@@ -78,5 +76,4 @@ def get_affine_transform(start_x, start_y, scale, offset, type, range_block_size
         else:
             y = 0
             x += dx
-    #average_value = block_sum/(range_block_size**2)
-    return block #- average_value, average_value if normalize else block.ravel(), average_value
+    return block
