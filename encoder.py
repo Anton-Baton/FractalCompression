@@ -79,7 +79,7 @@ def _find_domain_block(range_x, range_y, error_treshold, variance_treshold, chan
     return min_block_index, min_scale_factor, min_offset
 
 
-def _get_domain_pool(width, height, downsampled):
+def _get_domain_pool(width, height, divergence_treshold, downsampled):
     """
     Function that produce a domain pool with all domain blocks and their transformations
     :param width: width of initial image
@@ -96,9 +96,12 @@ def _get_domain_pool(width, height, downsampled):
             for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
                 domain = get_affine_transform(
                     x, y, 1.0, 0, transform_type, RANGE_BLOCK_SIZE, downsampled)
-                domain_pool.append(domain)
-                domain_averages.append(int(domain.sum()/(RANGE_BLOCK_SIZE**2)))
-                domain_positions.append((x, y))
+                domain_average = int(domain.sum()/(RANGE_BLOCK_SIZE**2))
+                domain_divergence = ((domain - domain_average)**2).sum()/(RANGE_BLOCK_SIZE**2)
+                if domain_divergence > divergence_treshold:
+                    domain_pool.append(domain)
+                    domain_averages.append(domain_average)
+                    domain_positions.append((x, y))
     return domain_pool, domain_averages, domain_positions
 
 
@@ -113,7 +116,7 @@ def encode(img):
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
-        domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, downsampled)
+        domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, 20, downsampled)
         transformations = []
         domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block

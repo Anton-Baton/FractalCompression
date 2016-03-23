@@ -32,8 +32,18 @@ def _decode_channel(channel_transformations, iter, width, height):
     image = np.zeros((width, height), dtype=np.uint8)
     image.fill(127)
     pool = mp.Pool()
+    transformations = []
+    for transformation in channel_transformations:
+        if transformation.is_flat:
+            ry, rx = transformation.range_y, transformation.range_x
+            rs = transformation.range_size
+            offset = transformation.offset
+            image[ry:ry+rs, rx:rx+rs] = offset
+        else:
+            transformations.append(transformation)
+
     for i in xrange(iter):
-        mappings = pool.map(partial(_get_contractive_mapping, image=image), channel_transformations)
+        mappings = pool.map(partial(_get_contractive_mapping, image=image), transformations)
         for rx, ry, rs, mapping in mappings:
             image[ry: ry+rs, rx:rx+rs] = mapping
         # for transformation in channel_transformations:
