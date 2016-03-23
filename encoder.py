@@ -97,7 +97,8 @@ def _get_domain_pool(width, height, divergence_treshold, downsampled):
                 domain = get_affine_transform(
                     x, y, 1.0, 0, transform_type, RANGE_BLOCK_SIZE, downsampled)
                 domain_average = int(domain.sum()/(RANGE_BLOCK_SIZE**2))
-                domain_divergence = ((domain - domain_average)**2).sum()/(RANGE_BLOCK_SIZE**2)
+                # unfortunately, analyser convinced that this is int not an array
+                domain_divergence = np.sum((domain - domain_average)**2)/(RANGE_BLOCK_SIZE**2)
                 if domain_divergence > divergence_treshold:
                     domain_pool.append(domain)
                     domain_averages.append(domain_average)
@@ -118,11 +119,12 @@ def encode(img):
         downsampled = _downsample_by_2(channel, img.width, img.height)
         domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, 20, downsampled)
         transformations = []
-        domain_pool = domain_pool[:256]
+        #domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
-        for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
-            for x in xrange(0, img.width, RANGE_BLOCK_SIZE):
+        # TODO: make iteration more clear
+        for y in (range(0, img.height-RANGE_BLOCK_SIZE, RANGE_BLOCK_SIZE-1)+[img.height-RANGE_BLOCK_SIZE]):
+            for x in (range(0, img.width-RANGE_BLOCK_SIZE, RANGE_BLOCK_SIZE-1)+[img.width-RANGE_BLOCK_SIZE]):
                 is_flat = False
                 domain_index, scale, offset = \
                     _find_domain_block(x, y, 500, 20, channel, domain_pool, domain_avg)
