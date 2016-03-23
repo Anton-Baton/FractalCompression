@@ -2,7 +2,8 @@ __author__ = 'anton'
 
 
 class Transformation(object):
-    def __init__(self, domain_x, domain_y, range_x, range_y, scale, offset, range_size, domain_size, transform_type):
+    def __init__(self, domain_x, domain_y, range_x, range_y, scale, offset,
+                 range_size, domain_size, transform_type, is_flat=False):
         self.domain_x = domain_x
         self.domain_y = domain_y
         self.range_x = range_x
@@ -12,3 +13,4 @@ class Transformation(object):
         self.range_size = range_size
         self.domain_size = domain_size
         self.transform_type = transform_type
+        self.is_flat = is_flat

@@ -32,15 +32,16 @@ def _downsample_by_2(channel, width, height):
     return downsampled_blocks
 
 
-def _find_domain_block(range_x, range_y, treshold, channel, domain_pool, domain_averages):
+def _find_domain_block(range_x, range_y, error_treshold, variance_treshold, channel, domain_pool, domain_averages):
     """
     Function finds appropriate domain block for a specified range block
     :param range_x: range block top left x coordinate
     :param range_y: range block top left y coordinate
-    :param treshold: search accuracy
+    :param error_treshold: search accuracy
+    :param variance_treshold: boundary of the flat block variance
     :param channel: image data
     :param domain_pool: domain pool
-    :return: typle of domain block index, scale and offset
+    :return: tuple of domain block index, scale and offset(domain block index == -1 signals that block is flat)
     """
     # extract range block from image data
     range_block = channel[range_y:range_y+RANGE_BLOCK_SIZE, range_x:range_x+RANGE_BLOCK_SIZE].copy()
@@ -52,27 +53,29 @@ def _find_domain_block(range_x, range_y, treshold, channel, domain_pool, domain_
     min_error = 1e9
     min_block_index = -1
     min_scale_factor = 0
-    min_offset = 0
+    min_offset = range_block_average
 
-    # search of appropriate domain block
-    for domain_block_index, domain_block in enumerate(domain_pool):
-        # find scale, offset and MSE
-        domain_block_average = domain_averages[domain_block_index]
-        avg_domain_block = domain_block - domain_block_average
-        bottom = (avg_domain_block * avg_domain_block).sum()
-        if bottom == 0.0:
-            scale = 0.0
-        else:
-            scale = (range_block * avg_domain_block).sum()*1.0/bottom
+    range_block_variance = (range_block*range_block).sum()/(RANGE_BLOCK_SIZE**2)
+    if range_block_variance > variance_treshold:
+        # search of appropriate domain block
+        for domain_block_index, domain_block in enumerate(domain_pool):
+            # find scale, offset and MSE
+            domain_block_average = domain_averages[domain_block_index]
+            avg_domain_block = domain_block - domain_block_average
+            bottom = (avg_domain_block * avg_domain_block).sum()
+            if bottom == 0.0:
+                scale = 0.0
+            else:
+                scale = (range_block * avg_domain_block).sum()*1.0/bottom
 
-        offset = int(range_block_average-domain_block_average*scale)
-        difference = (range_block - scale*avg_domain_block)
-        error = (difference * difference).sum()*1.0/(RANGE_BLOCK_SIZE**2)
-        if error < min_error:
-            min_error = error
-            min_block_index = domain_block_index
-            min_scale_factor = scale
-            min_offset = offset
+            offset = int(range_block_average-domain_block_average*scale)
+            difference = (range_block - scale*avg_domain_block)
+            error = (difference * difference).sum()*1.0/(RANGE_BLOCK_SIZE**2)
+            if error < min_error:
+                min_error = error
+                min_block_index = domain_block_index
+                min_scale_factor = scale
+                min_offset = offset
     return min_block_index, min_scale_factor, min_offset
 
 
@@ -117,13 +120,16 @@ def encode(img):
         # this implementation find domain block with the least error
         for y in xrange(0, img.height, RANGE_BLOCK_SIZE):
             for x in xrange(0, img.width, RANGE_BLOCK_SIZE):
+                is_flat = False
                 domain_index, scale, offset = \
-                    _find_domain_block(x, y, 500, channel, domain_pool, domain_avg)
-
+                    _find_domain_block(x, y, 500, 20, channel, domain_pool, domain_avg)
+                if domain_index == -1:
+                    is_flat = True
+                    domain_index = 0
                 domain_x, domain_y = domain_positions[domain_index]
                 transformation_type = domain_index % TRANSFORM_MAX
-                transformations.append(Transformation(domain_x, domain_y, x, y, scale, offset,
-                                                      RANGE_BLOCK_SIZE, DOMAIN_BLOCK_SIZE, transformation_type))
+                transformations.append(Transformation(domain_x, domain_y, x, y, scale, offset, RANGE_BLOCK_SIZE,
+                                                      DOMAIN_BLOCK_SIZE, transformation_type, is_flat))
                 print '.',
             print '\n'
         channels_transformations.append(transformations)
