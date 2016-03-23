@@ -5,6 +5,7 @@ import time
 import multiprocessing as mp
 from functools import partial
 
+
 def _downsample_locally(start_x, start_y, domain_size, range_size, image):
     block = np.zeros((range_size, range_size))
     # neighbours count
@@ -20,6 +21,7 @@ def _downsample_locally(start_x, start_y, domain_size, range_size, image):
 def decode_parallel(iterations, width, height, channels_transformations):
     pool = mp.Pool()
     start_time = time.time()
+    # can not use this with pool in _decode_channel
     result = pool.map(
         partial(_decode_channel, iter=iterations, width=width, height=height), channels_transformations)
     print time.time() - start_time
@@ -29,17 +31,30 @@ def decode_parallel(iterations, width, height, channels_transformations):
 def _decode_channel(channel_transformations, iter, width, height):
     image = np.zeros((width, height), dtype=np.uint8)
     image.fill(127)
+    pool = mp.Pool()
     for i in xrange(iter):
-        for transformation in channel_transformations:
-            ry, rx = transformation.range_y, transformation.range_x
-            dy, dx = transformation.domain_y, transformation.domain_x
-            rs, ds = transformation.range_size, transformation.domain_size
-            scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
-            # TODO: try to avoid downsampling every time
-            downsampled = _downsample_locally(dx, dy, ds, rs, image)
-            image[ry:ry+rs, rx:rx+rs] =\
-                get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
+        mappings = pool.map(partial(_get_contractive_mapping, image=image), channel_transformations)
+        for rx, ry, rs, mapping in mappings:
+            image[ry: ry+rs, rx:rx+rs] = mapping
+        # for transformation in channel_transformations:
+            # ry, rx = transformation.range_y, transformation.range_x
+            # dy, dx = transformation.domain_y, transformation.domain_x
+            # rs, ds = transformation.range_size, transformation.domain_size
+            # scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
+            # # TODO: try to avoid downsampling every time
+            # downsampled = _downsample_locally(dx, dy, ds, rs, image)
+            # image[ry:ry+rs, rx:rx+rs] =\
+            #     get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
     return image
+
+
+def _get_contractive_mapping(transformation, image):
+    ry, rx = transformation.range_y, transformation.range_x
+    dy, dx = transformation.domain_y, transformation.domain_x
+    rs, ds = transformation.range_size, transformation.domain_size
+    scale, offset, type = transformation.scale, transformation.offset, transformation.transform_type
+    downsampled = _downsample_locally(dx, dy, ds, rs, image)
+    return rx, ry, rs, get_affine_transform(0, 0, scale, offset, type, rs, downsampled)
 
 
 def decode(iterations, width, height, channels_transformations):
