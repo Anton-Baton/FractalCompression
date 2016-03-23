@@ -37,7 +37,7 @@ def _find_domain_block(range_x, range_y, error_treshold, variance_treshold, chan
     Function finds appropriate domain block for a specified range block
     :param range_x: range block top left x coordinate
     :param range_y: range block top left y coordinate
-    :param error_treshold: search accuracy
+    :param error_treshold: search accuracy. Unused by now
     :param variance_treshold: boundary of the flat block variance
     :param channel: image data
     :param domain_pool: domain pool
@@ -119,7 +119,7 @@ def encode(img):
         downsampled = _downsample_by_2(channel, img.width, img.height)
         domain_pool, domain_avg, domain_positions = _get_domain_pool(img.width, img.height, 20, downsampled)
         transformations = []
-        #domain_pool = domain_pool[:256]
+        # domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         # TODO: make iteration more clear

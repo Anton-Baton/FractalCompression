@@ -7,6 +7,15 @@ from functools import partial
 
 
 def _downsample_locally(start_x, start_y, domain_size, range_size, image):
+    """
+    Downsample specified domain block to match the size of range block
+    :param start_x: top left domain corner x
+    :param start_y: top left domain corner y
+    :param domain_size: size of domain block
+    :param range_size: size of range block
+    :param image: image to get domain
+    :return: downsampled range_size x range_size block
+    """
     block = np.zeros((range_size, range_size))
     # neighbours count
     nc = domain_size/range_size
@@ -19,6 +28,15 @@ def _downsample_locally(start_x, start_y, domain_size, range_size, image):
 
 
 def decode_parallel(iterations, width, height, channels_transformations):
+    """
+    Use pool over channels.
+    Can`t be used with current implementation of _decode_channel
+    :param iterations: number of iterations
+    :param width: width of target picture
+    :param height: height of target picture
+    :param channels_transformations: array of channel transformations
+    :return: downsampled and transformed block to be inserted into target image
+    """
     pool = mp.Pool()
     start_time = time.time()
     # can not use this with pool in _decode_channel
@@ -29,6 +47,15 @@ def decode_parallel(iterations, width, height, channels_transformations):
 
 
 def _decode_channel(channel_transformations, iter, width, height):
+    """
+    Decode one channel.
+    Use pool and extract flat blocks
+    :param channel_transformations: transformations over single channel
+    :param iter: number of iterations
+    :param width: width of target image
+    :param height: height of target image
+    :return: decoded image channel
+    """
     image = np.zeros((width, height), dtype=np.uint8)
     image.fill(127)
     pool = mp.Pool()
@@ -52,6 +79,13 @@ def _decode_channel(channel_transformations, iter, width, height):
 
 
 def _get_contractive_mapping(transformation, image):
+    """
+    Compute mapping from single transformation.
+    Used by pool.map() function
+    :param transformation: transformation to be applied
+    :param image: image from which domain block would be selected
+    :return: tuple of range block coordinates, it`s size and data to be inserted into target image
+    """
     ry, rx = transformation.range_y, transformation.range_x
     dy, dx = transformation.domain_y, transformation.domain_x
     rs, ds = transformation.range_size, transformation.domain_size
@@ -61,6 +95,14 @@ def _get_contractive_mapping(transformation, image):
 
 
 def decode(iterations, width, height, channels_transformations):
+    """
+    Decode image from transformations.
+    :param iterations: number of iterations
+    :param width: width of target image
+    :param height: height of target image
+    :param channels_transformations: array with transformations for every channel
+    :return: decoded image
+    """
     channels = []
     start_time = time.time()
     # run through all channels
