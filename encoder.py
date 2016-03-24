@@ -10,7 +10,7 @@ RANGE_BLOCK_SIZE = RANGE_SIZES[0]
 DOMAIN_SCALE_FACTOR = 2
 DOMAIN_SIZES = [DOMAIN_SCALE_FACTOR*x for x in RANGE_SIZES]
 DOMAIN_BLOCK_SIZE = DOMAIN_SIZES[0]
-DOMAIN_SKIP_FACTOR = 16
+DOMAIN_SKIP_FACTOR = 8
 
 
 def _downsample_by_2(channel, width, height):
@@ -59,11 +59,14 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     range_block_variance = (range_block*range_block).sum()/(range_size**2)
     if range_block_variance > variance_treshold:
         # search of appropriate domain block
+        bottom = 0
+        domain_block_average = 0
         for domain_block_index, domain_block in enumerate(domain_pool):
             # find scale, offset and MSE
-            domain_block_average = domain_averages[domain_block_index]
-            avg_domain_block = domain_block - domain_block_average
-            bottom = (avg_domain_block * avg_domain_block).sum()
+            if domain_block % TRANSFORM_MAX == 0:
+                domain_block_average = domain_averages[domain_block_index]
+                avg_domain_block = domain_block - domain_block_average
+                bottom = (avg_domain_block**2).sum()
             if bottom == 0.0:
                 scale = 0.0
             else:
@@ -114,7 +117,7 @@ def _get_filtered_domain_pool(width, height, domain_sizes, range_sizes, downsamp
     pass
 
 
-def _get_quadtree_domain_pool(width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor):
+def _get_quadtree_domain_pool(width, height, variance_treshold, domain_sizes, range_sizes, downsampled, domain_skip_factor):
     domain_pool = {}
     domain_averages = {}
     domain_positions = {}
@@ -122,18 +125,27 @@ def _get_quadtree_domain_pool(width, height, domain_sizes, range_sizes, downsamp
         dpool = []
         davg = []
         dpos = []
+        num = 0
+
         for y in xrange(0, height-dbs+1, domain_skip_factor):
             for x in xrange(0, width-dbs+1, domain_skip_factor):
+                domain_average = 0
                 for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
                     domain = get_affine_transform(
                         x, y, 1.0, 0, transform_type, rbs, downsampled)
-                    domain_average = int(domain.sum()/(rbs**2))
+                    if transform_type == TRANSFORM_NONE:
+                        domain_average = int(domain.sum()/(rbs**2))
+                        domain_variance = np.sum((domain-domain_average)**2)/(rbs**2)
+                        if domain_variance < variance_treshold:
+                            num += 1
+                            break
                     dpool.append(domain)
                     davg.append(domain_average)
                     dpos.append((x, y))
         domain_pool[dbs] = dpool
         domain_averages[dbs] = davg
         domain_positions[dbs] = dpos
+        print num, len(dpool)
     return domain_pool, domain_averages, domain_positions
 
 
@@ -183,14 +195,16 @@ def encode(img):
     """
     channels_transformations = []
     start_time = time.time()
-    divergence_treshold = 20
-    error_treshold = 75
+    range_variance_treshold = 20
+    domain_variance_treshold = 20
+    error_treshold = 200
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
         start_time = time.time()
         domain_pool, domain_avg, domain_positions = \
-            _get_quadtree_domain_pool(img.width, img.height, DOMAIN_SIZES, RANGE_SIZES, downsampled, DOMAIN_SKIP_FACTOR)
+            _get_quadtree_domain_pool(img.width, img.height, domain_variance_treshold,
+                                      DOMAIN_SIZES, RANGE_SIZES, downsampled, DOMAIN_SKIP_FACTOR)
         print time.time() - start_time
         transformations = []
         #domain_pool = domain_pool[:256]
@@ -203,7 +217,7 @@ def encode(img):
 
                 transformations.extend(
                     _get_range_block_transformations(x, y, RANGE_BLOCK_SIZE, DOMAIN_BLOCK_SIZE, error_treshold,
-                                                     divergence_treshold, channel, domain_pool, domain_positions,
+                                                     range_variance_treshold, channel, domain_pool, domain_positions,
                                                      domain_avg))
                 print '.',
             print '\n'
