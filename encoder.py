@@ -48,7 +48,6 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     range_block = channel[range_y:range_y+range_size, range_x:range_x+range_size].copy()
     # normalize range block by average pixel value
     range_block_average = int(range_block.sum()/(range_size**2))
-    range_block -= range_block_average
 
     # prepare values to store result
     min_error = 1e9
@@ -56,14 +55,15 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     min_scale_factor = 0
     min_offset = range_block_average
 
-    range_block_variance = (range_block*range_block).sum()/(range_size**2)
+    range_block_variance = np.sum(range_block**2-range_block_average**2)/(range_size**2)
     if range_block_variance > variance_treshold:
         # search of appropriate domain block
+        range_block -= range_block_average
         bottom = 0
         domain_block_average = 0
         for domain_block_index, domain_block in enumerate(domain_pool):
             # find scale, offset and MSE
-            if domain_block % TRANSFORM_MAX == 0:
+            if domain_block_index % TRANSFORM_MAX == 0:
                 domain_block_average = domain_averages[domain_block_index]
                 avg_domain_block = domain_block - domain_block_average
                 bottom = (avg_domain_block**2).sum()
@@ -103,7 +103,7 @@ def _get_domain_pool(width, height, divergence_treshold, downsampled,
                     x, y, 1.0, 0, transform_type, range_block_size, downsampled)
                 domain_average = int(domain.sum()/(range_block_size**2))
                 # unfortunately, analyser convinced that this is int not an array
-                domain_divergence = np.sum((domain - domain_average)**2)/(range_block_size**2)
+                domain_divergence = np.sum(domain**2 - domain_average**2)/(range_block_size**2)
                 if domain_divergence > divergence_treshold:
                     domain_pool.append(domain)
                     domain_averages.append(domain_average)
@@ -125,18 +125,21 @@ def _get_quadtree_domain_pool(width, height, variance_treshold, domain_sizes, ra
         dpool = []
         davg = []
         dpos = []
-        num = 0
+        variances = []
 
-        for y in xrange(0, height-dbs+1, domain_skip_factor):
-            for x in xrange(0, width-dbs+1, domain_skip_factor):
+        num = 0
+        # TODO : check the domain skip factor
+        for y in xrange(0, height-dbs+1, max(dbs/2, domain_skip_factor)):
+            for x in xrange(0, width-dbs+1, max(dbs/2, domain_skip_factor)):
                 domain_average = 0
                 for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
                     domain = get_affine_transform(
                         x, y, 1.0, 0, transform_type, rbs, downsampled)
                     if transform_type == TRANSFORM_NONE:
                         domain_average = int(domain.sum()/(rbs**2))
-                        domain_variance = np.sum((domain-domain_average)**2)/(rbs**2)
-                        if domain_variance < variance_treshold:
+                        domain_variance = np.sum(domain**2-domain_average**2)/(rbs**2)
+                        variances.append(domain_variance)
+                        if domain_variance < variance_treshold*rbs:
                             num += 1
                             break
                     dpool.append(domain)
@@ -146,6 +149,7 @@ def _get_quadtree_domain_pool(width, height, variance_treshold, domain_sizes, ra
         domain_averages[dbs] = davg
         domain_positions[dbs] = dpos
         print num, len(dpool)
+        print np.min(variances), np.max(variances), np.mean(variances)
     return domain_pool, domain_averages, domain_positions
 
 
@@ -195,17 +199,17 @@ def encode(img):
     """
     channels_transformations = []
     start_time = time.time()
-    range_variance_treshold = 20
-    domain_variance_treshold = 20
-    error_treshold = 200
+    range_variance_treshold = 10
+    domain_variance_treshold = 10
+    error_treshold = 100
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
-        start_time = time.time()
+        start_time1 = time.time()
         domain_pool, domain_avg, domain_positions = \
             _get_quadtree_domain_pool(img.width, img.height, domain_variance_treshold,
                                       DOMAIN_SIZES, RANGE_SIZES, downsampled, DOMAIN_SKIP_FACTOR)
-        print time.time() - start_time
+        print time.time() - start_time1
         transformations = []
         #domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
