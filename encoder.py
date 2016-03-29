@@ -10,7 +10,7 @@ RANGE_BLOCK_SIZE = RANGE_SIZES[0]
 DOMAIN_SCALE_FACTOR = 2
 DOMAIN_SIZES = [DOMAIN_SCALE_FACTOR*x for x in RANGE_SIZES]
 DOMAIN_BLOCK_SIZE = DOMAIN_SIZES[0]
-DOMAIN_SKIP_FACTOR = 8
+DOMAIN_SKIP_FACTOR = 4
 
 
 def _downsample_by_2(channel, width, height):
@@ -34,7 +34,8 @@ def _downsample_by_2(channel, width, height):
     return downsampled_blocks
 
 
-def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel, domain_pool, domain_averages):
+def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
+                       domain_pool, domain_averages, domain_transformations):
     """
     Function finds appropriate domain block for a specified range block
     :param range_x: range block top left x coordinate
@@ -45,10 +46,10 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     :return: tuple of domain block index, scale and offset(domain block index == -1 signals that block is flat)
     """
     # extract range block from image data
-    first_class, second_class, symmetry = _classify_block(range_x, range_y, range_size, range_size, channel)
+    first_class, second_class, range_symmetry = _classify_block(range_x, range_y, range_size, range_size, channel)
     # TODO : prove this
-    range_block = get_affine_transform(range_size, range_y, 1.0, 0, symmetry, range_size, channel)
-    # range_block = channel[range_y:range_y+range_size, range_x:range_x+range_size].copy()
+    #range_block = get_affine_transform(range_size, range_y, 1.0, 0, symmetry, range_size, channel)
+    range_block = channel[range_y:range_y+range_size, range_x:range_x+range_size].copy()
     # normalize range block by average pixel value
     # TODO: think about using this or call function
     range_block_average = int(range_block.sum()/(range_size**2))
@@ -59,17 +60,33 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     min_block_index = -1
     min_scale_factor = 0
     min_offset = range_block_average
+    best_symmetry = -1
 
+    # TODO: take a look at transformas between classes - Y.Fisher p. 282/276
     range_block_variance = (range_block*range_block).sum()/(range_size**2)
     if range_block_variance > variance_treshold:
         # search of appropriate domain block
-        bottom = 0
-        domain_block_average = 0
         for domain_block_index, domain_block in enumerate(domain_pool[first_class][second_class]):
             # find scale, offset and MSE
-            # if domain_block % TRANSFORM_MAX == 0:
+
+            # get the appropriate domain block transformations according to
+            # determined range and domain transformation
+            # more info in Yuval Fisher "Fractal image compression ... "
+            # code can be find on page 282
+            # TODO: try to write in more pythonic way -> very like C code
+            domain_symmetry = domain_transformations[first_class][second_class][domain_block_index]
+
+            symmetry_flag = (4 if domain_symmetry > 3 else 0) + (4 if range_symmetry > 3 else 0)
+
+            if symmetry_flag % 8 == 0:
+                symmetry = (4 + domain_symmetry % 4 - range_symmetry % 4) % 4
+            else:
+                symmetry = (4 + (domain_symmetry % 4 + 3*(4-range_symmetry % 4)) % 4) % 8
+
+            domain = get_affine_transform(0, 0, 1.0, 0, symmetry, range_size, domain_block)
+
             domain_block_average = domain_averages[first_class][second_class][domain_block_index]
-            avg_domain_block = domain_block - domain_block_average
+            avg_domain_block = domain - domain_block_average
             bottom = (avg_domain_block**2).sum()
             if bottom == 0.0:
                 scale = 0.0
@@ -84,7 +101,8 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
                 min_block_index = domain_block_index
                 min_scale_factor = scale
                 min_offset = offset
-    return min_block_index, first_class, second_class, min_scale_factor, min_offset, min_error
+                best_symmetry = symmetry
+    return min_block_index, first_class, second_class, min_scale_factor, min_offset, min_error, best_symmetry
 
 
 def _get_domain_pool(width, height, divergence_treshold, downsampled,
@@ -115,10 +133,10 @@ def _get_domain_pool(width, height, divergence_treshold, downsampled,
     return domain_pool, domain_averages, domain_positions
 
 
-def _get_filtered_domain_pool(width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor):
-    domain_pool, domain_avg, domain_pos = _get_quadtree_domain_pool(
-        width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor)
-    pass
+#def _get_filtered_domain_pool(width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor):
+#    domain_pool, domain_avg, domain_pos = _get_quadtree_domain_pool(
+#        width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor)
+#    pass
 
 
 def _get_block_average(block_width, block_height, block_x, block_y, block):
@@ -126,12 +144,15 @@ def _get_block_average(block_width, block_height, block_x, block_y, block):
 
 
 def _get_block_variance(block_width, block_height, block_x, block_y, block_avg, block):
+    # No need to worry - it`s an analyser`s jokes
     return int(
         np.sum((block[block_y:block_y+block_height, block_x:block_x+block_width]-block_avg)**2) *
         1.0/(block_width*block_height))
 
 
 def _classify_block(block_x, block_y, block_width, block_height, block):
+
+    # TODO: create something more like python that C
     coordinates_delta = [(0, 0), (block_width/2, 0), (0, block_height/2), (block_width/2, block_height/2)]
     subblocks_avg = []
     subblocks_variance = []
@@ -180,27 +201,36 @@ def _classify_block(block_x, block_y, block_width, block_height, block):
     return first_class, second_class, symmetry
 
 
+def _create_domain_pool_container(first_class_size, second_class_size):
+    result = []
+    for i in xrange(first_class_size):
+        fc = []
+        for j in xrange(second_class_size):
+            fc.append([])
+        result.append(fc)
+    return result
+
+
 def _get_quadtree_domain_pool(width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor):
     domain_pool = {}
     domain_averages = {}
     domain_positions = {}
     domain_transformations = {}
     for rbs, dbs in zip(range_sizes, domain_sizes):
-        dpool = [[[]]*24]*3
-        davg = [[[]]*24]*3
-        dpos = [[[]]*24]*3
-        dtrans = [[[]]*24]*3
-        num = 0
+        dpool = _create_domain_pool_container(3, 24)
+        davg = _create_domain_pool_container(3, 24)
+        dpos = _create_domain_pool_container(3, 24)
+        dtrans = _create_domain_pool_container(3, 24)
 
         for y in xrange(0, height-dbs+1, domain_skip_factor):
             for x in xrange(0, width-dbs+1, domain_skip_factor):
-                domain_average = 0
+                # domain_average = 0
                 #for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
 
-                first_class, second_class, symmetry = _classify_block(x, y, rbs, rbs, downsampled)
-                domain = get_affine_transform(
-                    x, y, 1.0, 0, symmetry, rbs, downsampled)
-                domain_avg = _get_block_average(rbs, rbs, x, y, downsampled)
+                first_class, second_class, symmetry = _classify_block(x/2, y/2, rbs, rbs, downsampled)
+                domain = downsampled[y/2:y/2+rbs, x/2:x/2+rbs]#get_affine_transform(
+                    #x, y, 1.0, 0, TRANSFORM_NONE, rbs, downsampled)
+                domain_avg = _get_block_average(rbs, rbs, x/2, y/2, downsampled)
                 dtrans[first_class][second_class].append(symmetry)
                 dpool[first_class][second_class].append(domain)
                 davg[first_class][second_class].append(domain_avg)
@@ -220,29 +250,33 @@ def _get_quadtree_domain_pool(width, height, domain_sizes, range_sizes, downsamp
 
         # use first domain block to fill empty classes
         # not very good but better than nothing at all
+        _, _, sym = _classify_block(0, 0, rbs, rbs, downsampled)
         first_dp_avg = _get_block_average(rbs, rbs, 0, 0, downsampled)
+        empty_classes = 0
         for fc in xrange(3):
             for sc in xrange(24):
                 if len(dpool[fc][sc]) == 0:
-                    dpool[fc][sc].append(get_affine_transform(0, 0, 1.0, 0, TRANSFORM_NONE,
-                                                              rbs, downsampled))
+                    empty_classes += 1
+                    dpool[fc][sc].append(downsampled[0:rbs, 0: rbs])
                     davg[fc][sc].append(first_dp_avg)
                     dpos[fc][sc].append((0, 0))
+                    dtrans[fc][sc].append(sym)
 
         domain_pool[dbs] = dpool
         domain_averages[dbs] = davg
         domain_positions[dbs] = dpos
-        print num, len(dpool)
-    return domain_pool, domain_averages, domain_positions
+        domain_transformations[dbs] = dtrans
+        print empty_classes
+    return domain_pool, domain_averages, domain_positions, domain_transformations
 
 
 def _get_range_block_transformations(rx, ry, range_size, domain_size, error_treshold, variance_treshold,
-                                     channel, domain_pool, domain_positions, domain_averages):
+                                     channel, domain_pool, domain_positions, domain_averages, domain_transformations):
     is_flat = False
     transformations = []
-    domain_index, first_class, second_class, scale, offset, error = \
+    domain_index, first_class, second_class, scale, offset, error, symmetry = \
         _find_domain_block(rx, ry, range_size, variance_treshold, channel,
-                           domain_pool[domain_size], domain_averages[domain_size])
+                           domain_pool[domain_size], domain_averages[domain_size], domain_transformations[domain_size])
     if domain_index == -1:
         is_flat = True
         domain_index = 0
@@ -253,23 +287,23 @@ def _get_range_block_transformations(rx, ry, range_size, domain_size, error_tres
         nrbs = range_size/2
         # new domain block size
         ndbs = domain_size/2
-        lt = _get_range_block_transformations(rx, ry, nrbs, ndbs, error_treshold, variance_treshold,
-                                              channel, domain_pool, domain_positions, domain_averages)
-        rt = _get_range_block_transformations(rx+nrbs, ry, nrbs, ndbs, error_treshold, variance_treshold,
-                                              channel, domain_pool, domain_positions, domain_averages)
-        lb = _get_range_block_transformations(rx, ry+nrbs, nrbs, ndbs, error_treshold, variance_treshold,
-                                              channel, domain_pool, domain_positions, domain_averages)
-        rb = _get_range_block_transformations(rx+nrbs, ry+nrbs, nrbs, ndbs, error_treshold, variance_treshold,
-                                              channel, domain_pool, domain_positions, domain_averages)
+        lt = _get_range_block_transformations(rx, ry, nrbs, ndbs, error_treshold, variance_treshold, channel,
+                                              domain_pool, domain_positions, domain_averages, domain_transformations)
+        rt = _get_range_block_transformations(rx+nrbs, ry, nrbs, ndbs, error_treshold, variance_treshold, channel,
+                                              domain_pool, domain_positions, domain_averages, domain_transformations)
+        lb = _get_range_block_transformations(rx, ry+nrbs, nrbs, ndbs, error_treshold, variance_treshold, channel,
+                                              domain_pool, domain_positions, domain_averages, domain_transformations)
+        rb = _get_range_block_transformations(rx+nrbs, ry+nrbs, nrbs, ndbs, error_treshold, variance_treshold, channel,
+                                              domain_pool, domain_positions, domain_averages, domain_transformations)
         transformations.extend(lt)
         transformations.extend(rt)
         transformations.extend(lb)
         transformations.extend(rb)
     else:
-        domain_x, domain_y = domain_positions[domain_size][domain_index]
-        transformation_type = domain_index % TRANSFORM_MAX
+        domain_x, domain_y = domain_positions[domain_size][first_class][second_class][domain_index]
+        #transformation_type = domain_index % TRANSFORM_MAX
         transformation = Transformation(domain_x, domain_y, rx, ry, scale, offset, range_size,
-                                        domain_size, transformation_type, is_flat)
+                                        domain_size, symmetry, is_flat)
         transformations = [transformation]
     return transformations
 
@@ -282,30 +316,31 @@ def encode(img):
     """
     channels_transformations = []
     start_time = time.time()
-    range_variance_treshold = 20
-    domain_variance_treshold = 20
+    range_variance_treshold = 10
+    # domain_variance_treshold = 20
     error_treshold = 200
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
-        start_time = time.time()
-        domain_pool, domain_avg, domain_positions = \
+        start_time_prep = time.time()
+        domain_pool, domain_avg, domain_positions, domain_transformations = \
             _get_quadtree_domain_pool(img.width, img.height,
                                       DOMAIN_SIZES, RANGE_SIZES, downsampled, DOMAIN_SKIP_FACTOR)
-        print time.time() - start_time
+        print time.time() - start_time_prep
         transformations = []
         #domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         # TODO: make iteration more clear
         print 'prepared'
+        # Little hack to force program to cover last blocks
         for y in (range(0, img.height-RANGE_BLOCK_SIZE, RANGE_BLOCK_SIZE-1)+[img.height-RANGE_BLOCK_SIZE]):
             for x in (range(0, img.width-RANGE_BLOCK_SIZE, RANGE_BLOCK_SIZE-1)+[img.width-RANGE_BLOCK_SIZE]):
 
                 transformations.extend(
                     _get_range_block_transformations(x, y, RANGE_BLOCK_SIZE, DOMAIN_BLOCK_SIZE, error_treshold,
                                                      range_variance_treshold, channel, domain_pool, domain_positions,
-                                                     domain_avg))
+                                                     domain_avg, domain_transformations))
                 print '.',
             print '\n'
         channels_transformations.append(transformations)
