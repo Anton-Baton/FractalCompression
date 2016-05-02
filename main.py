@@ -10,7 +10,7 @@ if __name__ == '__main__':
     print img.width, img.height
     transformations = encoder.encode(img)
     print len(transformations), len(transformations[0])
-    img_data = decoder.decode(8, img.width, img.height, transformations)
+    img_data = decoder.decode(10, img.width, img.height, transformations)
     print len(transformations)
     img = image.ImageData(img.width, img.height, img_data, img.mode)
     image.save_image('fairis_test.bmp', img)
