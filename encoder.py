@@ -1,8 +1,10 @@
-__author__ = 'anton'
 import numpy as np
 from transformations import Transformation
 from affine_transformer import get_affine_transform, TRANSFORM_NONE, TRANSFORM_MAX
 import time
+
+
+__author__ = 'anton'
 
 
 RANGE_SIZES = [32, 16, 8, 4]
@@ -47,8 +49,6 @@ def _find_domain_block(range_x, range_y, range_size, variance_treshold, channel,
     """
     # extract range block from image data
     first_class, second_class, range_symmetry = _classify_block(range_x, range_y, range_size, range_size, channel)
-    # TODO : prove this
-    #range_block = get_affine_transform(range_size, range_y, 1.0, 0, symmetry, range_size, channel)
     range_block = channel[range_y:range_y+range_size, range_x:range_x+range_size].copy()
     # normalize range block by average pixel value
     # TODO: think about using this or call function
@@ -133,12 +133,6 @@ def _get_domain_pool(width, height, divergence_treshold, downsampled,
     return domain_pool, domain_averages, domain_positions
 
 
-#def _get_filtered_domain_pool(width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor):
-#    domain_pool, domain_avg, domain_pos = _get_quadtree_domain_pool(
-#        width, height, domain_sizes, range_sizes, downsampled, domain_skip_factor)
-#    pass
-
-
 def _get_block_average(block_width, block_height, block_x, block_y, block):
     return int(np.sum(block[block_y:block_y+block_height, block_x: block_x+block_width])*1.0/(block_width*block_height))
 
@@ -152,12 +146,12 @@ def _get_block_variance(block_width, block_height, block_x, block_y, block_avg, 
 
 def _classify_block(block_x, block_y, block_width, block_height, block):
 
-    # TODO: create something more like python that C
+    # TODO: create something more like Python that C
     coordinates_delta = [(0, 0), (block_width/2, 0), (0, block_height/2), (block_width/2, block_height/2)]
     subblocks_avg = []
     subblocks_variance = []
     for i, (dx, dy) in enumerate(coordinates_delta):
-        d_avg = _get_block_average(block_width/2, block_height/2,block_x+dx,block_y+dy, block)
+        d_avg = _get_block_average(block_width/2, block_height/2, block_x+dx, block_y+dy, block)
         subblocks_avg.append((i, d_avg))
         subblocks_variance.append((i, _get_block_variance(
             block_width/2, block_height/2, block_x+dx,  block_y+dy, d_avg, block)))
@@ -171,8 +165,8 @@ def _classify_block(block_x, block_y, block_width, block_height, block):
         order[i] = (order[i] - symmetry + 4) % 4
 
     first_class = -1
-    for i, ord in enumerate(order):
-        if ord == 2:
+    for i, ordr in enumerate(order):
+        if ordr == 2:
             first_class = i - 1
 
     if order[3] == 1 or (first_class == 2 and order[2] == 1):
@@ -224,29 +218,15 @@ def _get_quadtree_domain_pool(width, height, domain_sizes, range_sizes, downsamp
 
         for y in xrange(0, height-dbs+1, domain_skip_factor):
             for x in xrange(0, width-dbs+1, domain_skip_factor):
-                # domain_average = 0
-                #for transform_type in xrange(TRANSFORM_NONE, TRANSFORM_MAX):
 
                 first_class, second_class, symmetry = _classify_block(x/2, y/2, rbs, rbs, downsampled)
-                domain = downsampled[y/2:y/2+rbs, x/2:x/2+rbs]#get_affine_transform(
-                    #x, y, 1.0, 0, TRANSFORM_NONE, rbs, downsampled)
+                domain = downsampled[y/2:y/2+rbs, x/2:x/2+rbs]
                 domain_avg = _get_block_average(rbs, rbs, x/2, y/2, downsampled)
+
                 dtrans[first_class][second_class].append(symmetry)
                 dpool[first_class][second_class].append(domain)
                 davg[first_class][second_class].append(domain_avg)
                 dpos[first_class][second_class].append((x, y))
-
-
-                # dpool[first_class][second_class] =
-                #if transform_type == TRANSFORM_NONE:
-                #    domain_average = int(domain.sum()/(rbs**2))
-                #    domain_variance = np.sum((domain-domain_average)**2)/(rbs**2)
-                #    if domain_variance < variance_treshold:
-                #        num += 1
-                #        break
-                #dpool.append(domain)
-                #davg.append(domain_average)
-                #dpos.append((x, y))
 
         # use first domain block to fill empty classes
         # not very good but better than nothing at all
@@ -301,7 +281,6 @@ def _get_range_block_transformations(rx, ry, range_size, domain_size, error_tres
         transformations.extend(rb)
     else:
         domain_x, domain_y = domain_positions[domain_size][first_class][second_class][domain_index]
-        #transformation_type = domain_index % TRANSFORM_MAX
         transformation = Transformation(domain_x, domain_y, rx, ry, scale, offset, range_size,
                                         domain_size, symmetry, is_flat)
         transformations = [transformation]
@@ -318,7 +297,8 @@ def encode(img):
     start_time = time.time()
     range_variance_treshold = 10
     # domain_variance_treshold = 20
-    error_treshold = 200
+    error_treshold = 50
+
     for channel in img.image_data:
         # downsample data to compare domain and range blocks
         downsampled = _downsample_by_2(channel, img.width, img.height)
@@ -328,7 +308,6 @@ def encode(img):
                                       DOMAIN_SIZES, RANGE_SIZES, downsampled, DOMAIN_SKIP_FACTOR)
         print time.time() - start_time_prep
         transformations = []
-        #domain_pool = domain_pool[:256]
         # run through all range blocks and find appropriate domain block
         # this implementation find domain block with the least error
         # TODO: make iteration more clear
@@ -346,6 +325,3 @@ def encode(img):
         channels_transformations.append(transformations)
     print time.time() - start_time
     return channels_transformations
-
-
-
