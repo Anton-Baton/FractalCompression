@@ -9,6 +9,7 @@ class ImageData(object):
     def __init__(self, width, height, image_data, mode):
         self.width = width
         self.height = height
+        self.size = (width, height)
         self.image_data = image_data
         self.channels = len(image_data)
         self.mode = mode

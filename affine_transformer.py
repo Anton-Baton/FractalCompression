@@ -2,7 +2,7 @@ __author__ = 'anton'
 import numpy as np
 
 # types of transformations
-# commented values - initial values
+# commented values - initial values(now it's reversed)
 # changes required by fisher domain classification scheme
 # which is worth to be used cause of it`s time reducing ability
 # and also it`ll be helpful for GPU
@@ -10,10 +10,10 @@ TRANSFORM_NONE = 0
 TRANSFORM_ROTATE_90 = 1
 TRANSFORM_ROTATE_180 = 2
 TRANSFORM_ROTATE_270 = 3
-TRANSFORM_FLIP_H = 7  # 4
+TRANSFORM_FLIP_H = 4  # 7
 TRANSFORM_FLIP_V = 5
-TRANSFORM_FLIP_FORWARD_DIAGONAL = 4  # 6
-TRANSFORM_FLIP_REVERSE_DIAGONAL = 6  # 7
+TRANSFORM_FLIP_FORWARD_DIAGONAL = 6  # 4
+TRANSFORM_FLIP_REVERSE_DIAGONAL = 7  # 6
 TRANSFORM_MAX = 8
 
 

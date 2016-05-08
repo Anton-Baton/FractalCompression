@@ -14,3 +14,8 @@ class Transformation(object):
         self.domain_size = domain_size
         self.transform_type = transform_type
         self.is_flat = is_flat
+
+    @staticmethod
+    def from_struct(range_size, domain_size, struct):
+        return Transformation(struct[0], struct[1], struct[2], struct[3], struct[4],
+                              struct[5], range_size, domain_size, struct[6])
