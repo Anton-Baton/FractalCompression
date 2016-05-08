@@ -8,6 +8,7 @@ typedef struct{
     float scale;
     int offset;
     int symmetry;
+    float error;
 } transformation;
 
 void transform_block(uchar* block, uchar* destination, int sym){
@@ -106,7 +107,6 @@ __kernel void find_matches(__read_only image2d_t image,
                            __read_only image2d_t downsampled,
                            __global int2* range_blocks_coordinates,
                            __const int image_width, __const int image_height,
-                           __const int global_width,
                            __global transformation* transformations){
     int index = get_global_id(0);
     //int x = index % global_width, y = index / global_width;
@@ -157,6 +157,7 @@ __kernel void find_matches(__read_only image2d_t image,
                     best_transformation.scale = scale;
                     best_transformation.offset = offset;
                     best_transformation.symmetry = symmetry;
+                    best_transformation.error = error;
                 }
             }
         }
