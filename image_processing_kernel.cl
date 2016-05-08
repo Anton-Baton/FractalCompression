@@ -104,22 +104,23 @@ __const sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE |
 
 __kernel void find_matches(__read_only image2d_t image,
                            __read_only image2d_t downsampled,
+                           __global int2* range_blocks_coordinates,
                            __const int image_width, __const int image_height,
-                           __const int global_width, __global transformation* transformations){
-    int x = get_global_id(0);
-    int y = get_global_id(1);
-
+                           __const int global_width,
+                           __global transformation* transformations){
+    int index = get_global_id(0);
+    //int x = index % global_width, y = index / global_width;
     //if (x*range_block_size >= image_width-range_block_size+1 ||
     //    y*range_block_size >= image_height-range_block_size+1)
     //    return;
     uchar range[range_block_size*range_block_size] ;
     uchar domain[range_block_size*range_block_size];
     uchar domain_transformation[range_block_size*range_block_size];
-
+    int2 range_coords = range_blocks_coordinates[index];
     for (int i=0; i < range_block_size; i++){
         for(int j=0; j < range_block_size; j++){
-
-            range[i*range_block_size+j] = (uchar)read_imageui(image, sampler, (int2)(x*range_block_size+j, y*range_block_size+i)).x;
+            range[i*range_block_size+j] = (uchar)read_imageui(
+                image, sampler, (int2)(range_coords.x+j, range_coords.y+i)).x;
         }
     }
 
@@ -128,8 +129,8 @@ __kernel void find_matches(__read_only image2d_t image,
     float min_error = (float)1e10;
 
     transformation best_transformation;
-    best_transformation.range_x = x*range_block_size;
-    best_transformation.range_y = y*range_block_size;
+    best_transformation.range_x = range_coords.x;
+    best_transformation.range_y = range_coords.y;
 
     for(int i=0; i<image_height/2-range_block_size+1; i+=domain_skip_factor){
         for(int j=0; j<image_width/2-range_block_size+1; j+=domain_skip_factor){
@@ -161,5 +162,5 @@ __kernel void find_matches(__read_only image2d_t image,
         }
     }
 
-    transformations[y*global_width+x] = best_transformation;
+    transformations[index] = best_transformation;
 }

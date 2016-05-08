@@ -1,6 +1,7 @@
 import numpy as np
 import pyopencl as cl
 import pyopencl.tools as cl_tools
+import pyopencl.array as cl_array
 from transformations import Transformation
 import time
 
@@ -33,6 +34,14 @@ def get_global_size(image_width, image_height, range_block_size):
     return image_width/range_block_size, image_height/range_block_size
 
 
+def get_range_blocks_coordinates(image_width, image_height, range_block_size):
+    range_blocks = []
+    for i in xrange(0, image_height-range_block_size+1, range_block_size):
+        for j in xrange(0, image_width-range_block_size+1, range_block_size):
+            range_blocks.append(cl_array.vec.make_int2(j, i))
+    return np.array(range_blocks)
+
+
 def encode(img):
     platform = cl.get_platforms()[0]
     device = platform.get_devices(cl.device_type.GPU)[0]
@@ -57,6 +66,7 @@ def encode(img):
     channels_transformations = []
     downsampled_size = (img.size[0]/2, img.size[1]/2)
     start_time = time.time()
+    range_block_coordinates = get_range_blocks_coordinates(img.size[1], img.size[0], RANGE_BLOCK_SIZE)
     for i, channel in enumerate(img.image_data):
         buffer = channel.astype(np.uint8)
         downsampled = get_downsampled(channel, img.size[0], img.size[1]).astype(np.uint8)
@@ -66,12 +76,16 @@ def encode(img):
         downsampled_image = cl.Image(ctx, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,
                                      cl_image_format, downsampled_size, None, downsampled)
 
-        transformations = np.zeros((global_size[0]*global_size[1], ), transfomation_struct)
+        range_coordinates = cl.Buffer(ctx, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,
+                                      hostbuf=range_block_coordinates)
+
+        transformations = np.zeros((global_size[0]*global_size[1],), transfomation_struct)
         out_transformations_buffer = cl.Buffer(ctx, cl.mem_flags.WRITE_ONLY, transformations.nbytes)
-        program.find_matches.set_scalar_arg_dtypes([None, None, np.int32, np.int32, np.int32, None])
-        find_matches_event = program.find_matches(queue, global_size, None, init_image,
-                                                  downsampled_image, np.int32(img.size[1]),
-                                                  np.int32(img.size[0]), np.int32(global_size[0]),
+
+        program.find_matches.set_scalar_arg_dtypes([None, None, None, np.int32, np.int32, np.int32, None])
+        find_matches_event = program.find_matches(queue, (global_size[0]*global_size[1], 1), None, init_image,
+                                                  downsampled_image, range_coordinates, np.int32(img.size[1]),
+                                                  np.int32(img.size[0]), np.int32(global_size[1]),
                                                   out_transformations_buffer)
 
         got_transformations_event = cl.enqueue_copy(queue, transformations, out_transformations_buffer,
