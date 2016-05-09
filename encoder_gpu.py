@@ -6,7 +6,7 @@ from transformations import Transformation
 import time
 
 
-RANGE_BLOCKS_SIZES = [32, 16, 8, 4]
+RANGE_BLOCKS_SIZES = [16, 8, 4]
 INITIAL_RANGE_BLOCK_SIZE = RANGE_BLOCKS_SIZES[0]
 
 TRESHOLD = 50
