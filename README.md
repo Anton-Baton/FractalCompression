@@ -1,2 +1,2 @@
 # FractalCompression
-OSiS coursework
+
